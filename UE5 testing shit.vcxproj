@@ -942,6 +942,7 @@
   <ItemGroup>
     <None Include="CppSDK\Assertions.inl" />
     <None Include="CppSDK\NameCollisions.inl" />
+    <None Include="README.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
