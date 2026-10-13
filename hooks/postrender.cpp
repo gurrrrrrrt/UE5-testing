@@ -49,6 +49,15 @@ bool K2_Project(SDK::FVector worldLocation, SDK::FVector2D* screenLocation) {
     return false;
 }
 
+double InterpolatedValue(double currentScalar, double maxScalar, double minValue, double maxValue) {
+    maxScalar = SDK::UKismetMathLibrary::FMin(maxScalar, currentScalar);
+
+    double interpolatedValue = maxValue - (maxValue - minValue) * (maxScalar / currentScalar);
+    interpolatedValue = SDK::UKismetMathLibrary::Clamp(interpolatedValue, minValue, maxValue);
+
+    return interpolatedValue;
+}
+
 void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCanvas* canvas) {
     Globals::canvas = canvas;
     Globals::screenSize = SDK::FVector2D(double(canvas->ClipX), double(canvas->ClipY));
@@ -78,23 +87,9 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
         return PostRenderOriginal(viewport, canvas);
     }
 
-    if (GetAsyncKeyState(VK_INSERT) & 1) {
-        GUI::open = !GUI::open;
-    }
-
-    //if (GetAsyncKeyState(VK_ESCAPE) & 1) {
-    //    DumpMaterials();
-    //}
-
-    GUI::DrawTxt(SDK::FVector2D(10.0f, 10.0f), SDK::FString(L"jewengine5 NIGGAAAAA"));
-
-    if (GUI::open) {
-        GUI::BeginWindow(SDK::FVector2D(100.0f, 100.0f), SDK::FVector2D(300.0f, 400.0f), SDK::FString(L"jewengine5"));
-
-        GUI::Checkbox(SDK::FString(L"Bounding Box"), &Features::boundingBox);
-    }
-
     if (persistentLevel && localController->AcknowledgedPawn) {
+        SDK::FVector cameraLocation = localController->PlayerCameraManager->GetCameraLocation();
+
         SDK::TArray<SDK::AActor*> actors = persistentLevel->Actors;
         for (int i = 0; i < actors.Num(); i++) {
             SDK::AActor* actor = actors[i];
@@ -113,7 +108,12 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
                     continue;
                 }
 
-                if (player == localController->AcknowledgedPawn) {
+                SDK::ABP_PlayerCharacter_C* localPlayer = static_cast<SDK::ABP_PlayerCharacter_C*>(localController->AcknowledgedPawn);
+                if (!player) {
+                    continue;
+                }
+
+                if (player == localPlayer) {
                     continue;
                 }
 
@@ -125,6 +125,12 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
                 if (!skeletalMesh) {
                     continue;
                 }
+
+                SDK::FVector rootPos = skeletalMesh->GetSocketLocation(SDK::UKismetStringLibrary::Conv_StringToName(L"root"));
+                double distance = SDK::UKismetMathLibrary::Vector_Distance(cameraLocation, rootPos) * 0.01;
+                double boxSize = InterpolatedValue(distance, 100.0, 1.0, 3.0);
+                double fontSize = InterpolatedValue(150.0, distance, 8.0, 10.0);
+                float boxThickness = (distance < 30.0) ? 2.0f : 1.0f;
 
                 SDK::FVector origin, extent = SDK::FVector();
                 float sphereRadius = 0.0f;
@@ -168,40 +174,71 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
                 double actorHeight = mostBottom - mostTop;
                 double actorWidth = mostRight - mostLeft;
 
-                Globals::canvas->K2_DrawBox(SDK::FVector2D(mostLeft, mostTop), SDK::FVector2D(actorWidth, actorHeight), 1.0f, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
+                if (Features::Visuals::boundingBox) {
+                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostTop - boxSize), SDK::FVector2D(mostRight + boxSize, mostTop - boxSize), boxThickness + 2.0f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
+                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostBottom + boxSize), SDK::FVector2D(mostRight + boxSize, mostBottom + boxSize), boxThickness + 2.0f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
+                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostBottom + boxSize), SDK::FVector2D(mostLeft - boxSize, mostTop - boxSize), boxThickness + 2.0f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
+                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostRight + boxSize, mostTop - boxSize), SDK::FVector2D(mostRight + boxSize, mostBottom + boxSize), boxThickness + 2.0f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
 
-                if (!chamsMaterial) {
-                    chamsMaterial = SDK::UObject::FindObject<SDK::UMaterial>("Material WireframeMaterial.WireframeMaterial");
+                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostTop - boxSize), SDK::FVector2D(mostRight + boxSize, mostTop - boxSize), boxThickness, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
+                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostBottom + boxSize), SDK::FVector2D(mostRight + boxSize, mostBottom + boxSize), boxThickness, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
+                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostBottom + boxSize), SDK::FVector2D(mostLeft - boxSize, mostTop - boxSize), boxThickness, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
+                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostRight + boxSize, mostTop - boxSize), SDK::FVector2D(mostRight + boxSize, mostBottom + boxSize), boxThickness, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
                 }
 
-                if (chamsMaterial) {
-                    chamsMaterial->bDisableDepthTest = true;
-                    chamsMaterial->BlendMode = SDK::EBlendMode::BLEND_Additive;
-
-                    skeletalMesh->bRenderCustomDepth = true;
-                    skeletalMesh->SetCustomDepthStencilValue(11);
-
-                    SDK::TArray<SDK::UMaterialInterface*> materials = skeletalMesh->GetMaterials();
-                    for (int32_t j = 0; j < materials.Num(); j++) {
-                        if (!materials.IsValidIndex(j)) {
-                            continue;
-                        }
-
-                        SDK::UMaterialInstanceDynamic* dynMat = skeletalMesh->CreateDynamicMaterialInstance(j, chamsMaterial, SDK::FName());
-                        if (!dynMat) {
-                            continue;
-                        }
-
-                        SDK::FLinearColor renderColor = SDK::FLinearColor(4.0f, 0.0f, 4.0f, 1.0f);
-
-                        dynMat->SetVectorParameterValue(SDK::UKismetStringLibrary::Conv_StringToName(L"EmissiveColor"), renderColor);
-                        dynMat->SetVectorParameterValue(SDK::UKismetStringLibrary::Conv_StringToName(L"Color"), renderColor);
-
-                        skeletalMesh->SetMaterial(j, dynMat);
+                if (Features::Visuals::chams) {
+                    if (!chamsMaterial) {
+                        chamsMaterial = SDK::UObject::FindObject<SDK::UMaterial>("Material WireframeMaterial.WireframeMaterial");
                     }
+
+                    if (chamsMaterial) {
+                        chamsMaterial->bDisableDepthTest = true;
+                        chamsMaterial->BlendMode = SDK::EBlendMode::BLEND_Additive;
+
+                        skeletalMesh->bRenderCustomDepth = true;
+                        skeletalMesh->SetCustomDepthStencilValue(11);
+
+                        SDK::TArray<SDK::UMaterialInterface*> materials = skeletalMesh->GetMaterials();
+                        for (int32_t j = 0; j < materials.Num(); j++) {
+                            if (!materials.IsValidIndex(j)) {
+                                continue;
+                            }
+
+                            SDK::UMaterialInstanceDynamic* dynMat = skeletalMesh->CreateDynamicMaterialInstance(j, chamsMaterial, SDK::FName());
+                            if (!dynMat) {
+                                continue;
+                            }
+
+                            SDK::FLinearColor renderColor = SDK::FLinearColor(4.0f, 0.0f, 4.0f, 1.0f);
+
+                            dynMat->SetVectorParameterValue(SDK::UKismetStringLibrary::Conv_StringToName(L"EmissiveColor"), renderColor);
+                            dynMat->SetVectorParameterValue(SDK::UKismetStringLibrary::Conv_StringToName(L"Color"), renderColor);
+
+                            skeletalMesh->SetMaterial(j, dynMat);
+                        }
+                    }
+                }
+                else {
+
                 }
             }
         }
+    }
+
+    if (GetAsyncKeyState(VK_INSERT) & 1) {
+        GUI::open = !GUI::open;
+    }
+
+    //if (GetAsyncKeyState(VK_ESCAPE) & 1) {
+    //    DumpMaterials();
+    //}
+
+    GUI::DrawTxt(SDK::FVector2D(10.0f, 10.0f), SDK::FString(L"jewengine5 NIGGAAAAA"));
+
+    if (GUI::open) {
+        GUI::BeginWindow(SDK::FVector2D(100.0f, 100.0f), SDK::FVector2D(300.0f, 400.0f), SDK::FString(L"jewengine5"));
+
+        GUI::Checkbox(SDK::FString(L"Bounding Box"), &Features::Visuals::boundingBox);
     }
 
     return PostRenderOriginal(viewport, canvas);

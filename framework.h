@@ -24,5 +24,8 @@ namespace Render {
 }
 
 namespace Features {
-	inline bool boundingBox = false;
+	namespace Visuals {
+		inline bool boundingBox = true;
+		inline bool chams = true;
+	}
 }
