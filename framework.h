@@ -12,6 +12,7 @@ namespace Globals {
 	inline SDK::APlayerController* localController = nullptr;
 	inline SDK::UGameViewportClient* gameViewportClient = nullptr;
 	inline SDK::UCanvas* canvas = nullptr;
+	inline SDK::FVector2D screenSize = SDK::FVector2D();
 }
 
 namespace Indexes {

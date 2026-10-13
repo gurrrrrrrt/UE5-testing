@@ -3,7 +3,7 @@
 
 PostRender::PostRender_t PostRender::PostRenderOriginal = nullptr;
 
-static SDK::UMaterial* cachedMaterial = nullptr;
+static SDK::UMaterial* chamsMaterial = nullptr;
 
 void DumpMaterials() {
     auto objects = SDK::UObject::GObjects.GetTypedPtr();
@@ -31,7 +31,28 @@ void DumpMaterials() {
     std::println("finished dump! total materials found: {}", count);
 }
 
+bool K2_Project(SDK::FVector worldLocation, SDK::FVector2D* screenLocation) {
+    SDK::FVector returnValue = Globals::canvas->K2_Project(worldLocation);
+    if (returnValue.Z <= 0.0) {
+        returnValue.X *= -1.0;
+        returnValue.Y *= -1.0;
+
+        returnValue.X += Globals::screenSize.X;
+        returnValue.Y += Globals::screenSize.Y;
+    }
+
+    if (returnValue.Z > 0.0) {
+        *screenLocation = SDK::FVector2D(returnValue.X, returnValue.Y);
+        return true;
+    }
+
+    return false;
+}
+
 void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCanvas* canvas) {
+    Globals::canvas = canvas;
+    Globals::screenSize = SDK::FVector2D(double(canvas->ClipX), double(canvas->ClipY));
+
     SDK::UWorld* world = viewport->World;
     if (!world) {
         return PostRenderOriginal(viewport, canvas);
@@ -65,63 +86,118 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
     //    DumpMaterials();
     //}
 
-    if (canvas) {
-        Globals::canvas = canvas;
+    GUI::DrawTxt(SDK::FVector2D(10.0f, 10.0f), SDK::FString(L"jewengine5 NIGGAAAAA"));
 
-        if (GUI::open) {
-            GUI::BeginWindow(SDK::FVector2D(100.0f, 100.0f), SDK::FVector2D(300.0f, 400.0f), SDK::FString(L"jewengine5"));
+    if (GUI::open) {
+        GUI::BeginWindow(SDK::FVector2D(100.0f, 100.0f), SDK::FVector2D(300.0f, 400.0f), SDK::FString(L"jewengine5"));
 
-            GUI::Checkbox(SDK::FString(L"Bounding Box"), &Features::boundingBox);
-        }
+        GUI::Checkbox(SDK::FString(L"Bounding Box"), &Features::boundingBox);
+    }
 
-        if (persistentLevel && localController->AcknowledgedPawn) {
-            SDK::TArray<SDK::AActor*> actors = persistentLevel->Actors;
-            for (int i = 0; i < actors.Num(); i++) {
-                SDK::AActor* actor = actors[i];
-                if (!actor) {
+    if (persistentLevel && localController->AcknowledgedPawn) {
+        SDK::TArray<SDK::AActor*> actors = persistentLevel->Actors;
+        for (int i = 0; i < actors.Num(); i++) {
+            SDK::AActor* actor = actors[i];
+            if (!actor) {
+                continue;
+            }
+
+            if (actor->IsA(SDK::EClassCastFlags::Pawn)) {
+                SDK::ABP_PlayerCharacter_C* player = static_cast<SDK::ABP_PlayerCharacter_C*>(actor);
+                if (!player) {
                     continue;
                 }
 
-                if (actor->IsA(SDK::EClassCastFlags::Pawn)) {
-                    SDK::ABP_PlayerCharacter_C* player = static_cast<SDK::ABP_PlayerCharacter_C*>(actor);
-                    if (!player) {
+                SDK::ABP_PlayerState_C* playerState = static_cast<SDK::ABP_PlayerState_C*>(player->PlayerState);
+                if (!playerState) {
+                    continue;
+                }
+
+                if (player == localController->AcknowledgedPawn) {
+                    continue;
+                }
+
+                if (player->bDead) {
+                    continue;
+                }
+
+                SDK::USkeletalMeshComponent* skeletalMesh = player->Mesh;
+                if (!skeletalMesh) {
+                    continue;
+                }
+
+                SDK::FVector origin, extent = SDK::FVector();
+                float sphereRadius = 0.0f;
+
+                SDK::UKismetSystemLibrary::GetComponentBounds(player->Mesh, &origin, &extent, &sphereRadius);
+
+                double mostLeft = DBL_MAX;
+                double mostRight = DBL_MIN;
+                double mostTop = DBL_MAX;
+                double mostBottom = DBL_MIN;
+
+                for (int x = 0; x < 8; x++) {
+                    SDK::FVector corner = SDK::FVector();
+
+                    corner.X = (x & 1) ? extent.X : -extent.X;
+                    corner.Y = (x & 2) ? extent.Y : -extent.Y;
+                    corner.Z = (x & 2) ? extent.Z : -extent.Z;
+
+                    SDK::FVector2D origin2d = SDK::FVector2D();
+                    if (!K2_Project(origin + corner, &origin2d)) {
                         continue;
                     }
 
-                    SDK::ABP_PlayerState_C* playerState = static_cast<SDK::ABP_PlayerState_C*>(player->PlayerState);
-                    if (!playerState) {
-                        continue;
+                    if (origin2d.X < mostLeft) {
+                        mostLeft = origin2d.X;
                     }
 
-                    if (player == localController->AcknowledgedPawn) {
-                        continue;
+                    if (origin2d.X > mostRight) {
+                        mostRight = origin2d.X;
                     }
 
-                    if (player->bDead) {
-                        continue;
+                    if (origin2d.Y < mostTop) {
+                        mostTop = origin2d.Y;
                     }
 
-                    if (!cachedMaterial) {
-                        cachedMaterial = SDK::UObject::FindObject<SDK::UMaterial>("Material WireframeMaterial.WireframeMaterial");
+                    if (origin2d.Y > mostBottom) {
+                        mostBottom = origin2d.Y;
                     }
+                }
 
-                    if (cachedMaterial) {
-                        SDK::USkeletalMeshComponent* skeletalMesh = player->Mesh;
-                        if (skeletalMesh) {
-                            SDK::TArray<SDK::UMaterialInterface*> materials = skeletalMesh->GetMaterials();
-                            for (int32_t j = 0; j < materials.Num(); j++) {
-                                if (!materials.IsValidIndex(j)) {
-                                    continue;
-                                }
+                double actorHeight = mostBottom - mostTop;
+                double actorWidth = mostRight - mostLeft;
 
-                                SDK::UMaterialInstanceDynamic* dynMat = skeletalMesh->CreateDynamicMaterialInstance(j, cachedMaterial, SDK::FName());
-                                if (!dynMat) {
-                                    continue;
-                                }
+                Globals::canvas->K2_DrawBox(SDK::FVector2D(mostLeft, mostTop), SDK::FVector2D(actorWidth, actorHeight), 1.0f, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
 
-                                skeletalMesh->SetMaterial(j, dynMat);
-                            }
+                if (!chamsMaterial) {
+                    chamsMaterial = SDK::UObject::FindObject<SDK::UMaterial>("Material WireframeMaterial.WireframeMaterial");
+                }
+
+                if (chamsMaterial) {
+                    chamsMaterial->bDisableDepthTest = true;
+                    chamsMaterial->BlendMode = SDK::EBlendMode::BLEND_Additive;
+
+                    skeletalMesh->bRenderCustomDepth = true;
+                    skeletalMesh->SetCustomDepthStencilValue(11);
+
+                    SDK::TArray<SDK::UMaterialInterface*> materials = skeletalMesh->GetMaterials();
+                    for (int32_t j = 0; j < materials.Num(); j++) {
+                        if (!materials.IsValidIndex(j)) {
+                            continue;
                         }
+
+                        SDK::UMaterialInstanceDynamic* dynMat = skeletalMesh->CreateDynamicMaterialInstance(j, chamsMaterial, SDK::FName());
+                        if (!dynMat) {
+                            continue;
+                        }
+
+                        SDK::FLinearColor renderColor = SDK::FLinearColor(4.0f, 0.0f, 4.0f, 1.0f);
+
+                        dynMat->SetVectorParameterValue(SDK::UKismetStringLibrary::Conv_StringToName(L"EmissiveColor"), renderColor);
+                        dynMat->SetVectorParameterValue(SDK::UKismetStringLibrary::Conv_StringToName(L"Color"), renderColor);
+
+                        skeletalMesh->SetMaterial(j, dynMat);
                     }
                 }
             }

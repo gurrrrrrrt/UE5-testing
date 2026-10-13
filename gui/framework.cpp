@@ -1,5 +1,9 @@
 #include "framework.h"
 
+void GUI::DrawTxt(SDK::FVector2D pos, SDK::FString label) {
+    Globals::canvas->K2_DrawText(Render::defaultFont, SDK::FString(label), pos, SDK::FVector2D(1.0f, 1.0f), SDK::FLinearColor(1.0f, 1.0f, 1.0f, 1.0f), 0.0f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f), SDK::FVector2D(1.0f, 1.0f), false, false, true, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
+}
+
 void GUI::DrawFilledRect(SDK::FVector2D pos, SDK::FVector2D size, SDK::FLinearColor color) {
     for (double i = 0; i < size.Y; i++) {
         Globals::canvas->K2_DrawLine(SDK::FVector2D(pos.X, pos.Y + i), SDK::FVector2D(pos.X + size.X, pos.Y + i), 1.0f, color);
