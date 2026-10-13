@@ -129,7 +129,7 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
                 SDK::FVector origin, extent = SDK::FVector();
                 float sphereRadius = 0.0f;
 
-                SDK::UKismetSystemLibrary::GetComponentBounds(player->Mesh, &origin, &extent, &sphereRadius);
+                SDK::UKismetSystemLibrary::GetComponentBounds(skeletalMesh, &origin, &extent, &sphereRadius);
 
                 double mostLeft = DBL_MAX;
                 double mostRight = DBL_MIN;
