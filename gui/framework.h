@@ -7,8 +7,8 @@
 namespace GUI {
 	inline static bool open = true;
 
-    inline SDK::FVector2D windowPos;
-    inline SDK::FVector2D cursor;
+    inline SDK::FVector2D windowPos = SDK::FVector2D();
+    inline SDK::FVector2D cursor = SDK::FVector2D();
 
     void DrawTxt(SDK::FVector2D pos, SDK::FString label);
     void DrawFilledRect(SDK::FVector2D pos, SDK::FVector2D size, SDK::FLinearColor color);
