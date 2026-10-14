@@ -26,6 +26,11 @@ namespace Render {
 namespace Features {
 	namespace Visuals {
 		inline bool boundingBox = true;
+		inline bool skeleton = true;
 		inline bool chams = true;
+	}
+
+	namespace Exploits {
+		inline bool unlockUeConsole = true;
 	}
 }

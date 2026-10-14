@@ -4,6 +4,7 @@
 PostRender::PostRender_t PostRender::PostRenderOriginal = nullptr;
 
 static SDK::UMaterial* chamsMaterial = nullptr;
+static bool ueConsoleInitialized = false;
 
 void DumpMaterials() {
     auto objects = SDK::UObject::GObjects.GetTypedPtr();
@@ -89,6 +90,8 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
 
     if (persistentLevel && localController->AcknowledgedPawn) {
         SDK::FVector cameraLocation = localController->PlayerCameraManager->GetCameraLocation();
+        //SDK::FRotator cameraRotation = localController->PlayerCameraManager->GetCameraRotation();
+        //SDK::FVector cameraForwardVector = SDK::UKismetMathLibrary::GetForwardVector(cameraRotation);
 
         SDK::TArray<SDK::AActor*> actors = persistentLevel->Actors;
         for (int i = 0; i < actors.Num(); i++) {
@@ -113,7 +116,16 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
                     continue;
                 }
 
+                SDK::ABP_PlayerState_C* localPlayerState = static_cast<SDK::ABP_PlayerState_C*>(localPlayer->PlayerState);
+                if (!localPlayerState) {
+                    continue;
+                }
+
                 if (player == localPlayer) {
+                    continue;
+                }
+
+                if (playerState->Team == localPlayerState->Team) {
                     continue;
                 }
 
@@ -175,15 +187,49 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
                 double actorWidth = mostRight - mostLeft;
 
                 if (Features::Visuals::boundingBox) {
-                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostTop - boxSize), SDK::FVector2D(mostRight + boxSize, mostTop - boxSize), boxThickness + 2.0f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
-                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostBottom + boxSize), SDK::FVector2D(mostRight + boxSize, mostBottom + boxSize), boxThickness + 2.0f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
-                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostBottom + boxSize), SDK::FVector2D(mostLeft - boxSize, mostTop - boxSize), boxThickness + 2.0f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
-                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostRight + boxSize, mostTop - boxSize), SDK::FVector2D(mostRight + boxSize, mostBottom + boxSize), boxThickness + 2.0f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
+                    canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostTop - boxSize), SDK::FVector2D(mostRight + boxSize, mostTop - boxSize), boxThickness + 2.0f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
+                    canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostBottom + boxSize), SDK::FVector2D(mostRight + boxSize, mostBottom + boxSize), boxThickness + 2.0f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
+                    canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostBottom + boxSize), SDK::FVector2D(mostLeft - boxSize, mostTop - boxSize), boxThickness + 2.0f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
+                    canvas->K2_DrawLine(SDK::FVector2D(mostRight + boxSize, mostTop - boxSize), SDK::FVector2D(mostRight + boxSize, mostBottom + boxSize), boxThickness + 2.0f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
 
-                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostTop - boxSize), SDK::FVector2D(mostRight + boxSize, mostTop - boxSize), boxThickness, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
-                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostBottom + boxSize), SDK::FVector2D(mostRight + boxSize, mostBottom + boxSize), boxThickness, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
-                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostBottom + boxSize), SDK::FVector2D(mostLeft - boxSize, mostTop - boxSize), boxThickness, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
-                    Globals::canvas->K2_DrawLine(SDK::FVector2D(mostRight + boxSize, mostTop - boxSize), SDK::FVector2D(mostRight + boxSize, mostBottom + boxSize), boxThickness, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
+                    canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostTop - boxSize), SDK::FVector2D(mostRight + boxSize, mostTop - boxSize), boxThickness, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
+                    canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostBottom + boxSize), SDK::FVector2D(mostRight + boxSize, mostBottom + boxSize), boxThickness, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
+                    canvas->K2_DrawLine(SDK::FVector2D(mostLeft - boxSize, mostBottom + boxSize), SDK::FVector2D(mostLeft - boxSize, mostTop - boxSize), boxThickness, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
+                    canvas->K2_DrawLine(SDK::FVector2D(mostRight + boxSize, mostTop - boxSize), SDK::FVector2D(mostRight + boxSize, mostBottom + boxSize), boxThickness, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
+                }
+
+                if (Features::Visuals::skeleton) {
+                    const wchar_t* bonePairs[][2] = {
+                        { L"head", L"neck_01" },
+                        { L"neck_01", L"spine_03" },
+                        { L"spine_03", L"spine_01" },
+                        { L"spine_01", L"pelvis" },
+                        { L"neck_01", L"upperarm_l" },
+                        { L"upperarm_l", L"lowerarm_l" },
+                        { L"lowerarm_l", L"hand_l" },
+                        { L"neck_01", L"upperarm_r" },
+                        { L"upperarm_r", L"lowerarm_r" },
+                        { L"lowerarm_r", L"hand_r" },
+                        { L"pelvis", L"thigh_l" },
+                        { L"thigh_l", L"calf_l" },
+                        { L"calf_l", L"foot_l" },
+                        { L"pelvis", L"thigh_r" },
+                        { L"thigh_r", L"calf_r" },
+                        { L"calf_r", L"foot_r" }
+                    };
+
+                    for (auto& pair : bonePairs) {
+                        SDK::FName bone1Name = SDK::UKismetStringLibrary::Conv_StringToName(SDK::FString(pair[0]));
+                        SDK::FName bone2Name = SDK::UKismetStringLibrary::Conv_StringToName(SDK::FString(pair[1]));
+                        SDK::FVector bone1World = skeletalMesh->GetSocketLocation(bone1Name);
+                        SDK::FVector bone2World = skeletalMesh->GetSocketLocation(bone2Name);
+                        SDK::FVector2D bone1Screen, bone2Screen = SDK::FVector2D();
+
+                        if (K2_Project(bone1World, &bone1Screen) && K2_Project(bone2World, &bone2Screen)) {
+                            canvas->K2_DrawLine(bone1Screen, bone2Screen, 1.5f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
+                            canvas->K2_DrawLine(bone1Screen, bone2Screen, 1.0f, SDK::FLinearColor(1.0f, 0.0f, 0.0f, 1.0f));
+                        }
+                    }
                 }
 
                 if (Features::Visuals::chams) {
@@ -239,6 +285,25 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
         GUI::BeginWindow(SDK::FVector2D(100.0f, 100.0f), SDK::FVector2D(300.0f, 400.0f), SDK::FString(L"jewengine5"));
 
         GUI::Checkbox(SDK::FString(L"Bounding Box"), &Features::Visuals::boundingBox);
+        GUI::Checkbox(SDK::FString(L"Chams"), &Features::Visuals::chams);
+        GUI::Checkbox(SDK::FString(L"Unlock UE Console"), &Features::Exploits::unlockUeConsole);
+    }
+
+    if (Features::Exploits::unlockUeConsole) {
+        if (!ueConsoleInitialized) {
+            SDK::UClass* console = SDK::UConsole::StaticClass();
+            if (console && viewport) {
+                SDK::UObject* newConsole = SDK::UGameplayStatics::SpawnObject(console, viewport);
+                if (newConsole) {
+                    viewport->ViewportConsole = static_cast<SDK::UConsole*>(newConsole);
+
+                    ueConsoleInitialized = true;
+                }
+            }
+        }
+    }
+    else {
+        ueConsoleInitialized = false;
     }
 
     return PostRenderOriginal(viewport, canvas);
