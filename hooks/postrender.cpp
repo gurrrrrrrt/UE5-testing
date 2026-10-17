@@ -11,8 +11,6 @@ void DumpMaterials() {
         return;
     }
 
-    int count = 0;
-
     for (int32_t i = 0; i < objects->Num(); i++) {
         SDK::UObject* obj = objects->GetByIndex(i);
         if (!obj) {
@@ -21,14 +19,9 @@ void DumpMaterials() {
 
         if (obj->IsA(SDK::UMaterial::StaticClass()) || obj->IsA(SDK::UMaterialInstanceConstant::StaticClass())) {
             std::string objName = obj->GetFullName();
-
             std::println("{}", objName.c_str());
-
-            count++;
         }
     }
-
-    std::println("finished dump! total materials found: {}", count);
 }
 
 bool K2_Project(SDK::FVector worldLocation, SDK::FVector2D* screenLocation) {
@@ -147,31 +140,20 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
 
                 for (int x = 0; x < 8; x++) {
                     SDK::FVector corner = SDK::FVector();
+                    SDK::FVector2D origin2d = SDK::FVector2D();
 
                     corner.X = (x & 1) ? extent.X : -extent.X;
                     corner.Y = (x & 2) ? extent.Y : -extent.Y;
                     corner.Z = (x & 2) ? extent.Z : -extent.Z;
 
-                    SDK::FVector2D origin2d = SDK::FVector2D();
                     if (!K2_Project(origin + corner, &origin2d)) {
                         continue;
                     }
 
-                    if (origin2d.X < mostLeft) {
-                        mostLeft = origin2d.X;
-                    }
-
-                    if (origin2d.X > mostRight) {
-                        mostRight = origin2d.X;
-                    }
-
-                    if (origin2d.Y < mostTop) {
-                        mostTop = origin2d.Y;
-                    }
-
-                    if (origin2d.Y > mostBottom) {
-                        mostBottom = origin2d.Y;
-                    }
+                    mostLeft = (origin2d.X < mostLeft) ? origin2d.X : mostLeft;
+                    mostRight = (origin2d.X > mostRight) ? origin2d.X : mostRight;
+                    mostTop = (origin2d.Y < mostTop) ? origin2d.Y : mostTop;
+                    mostBottom = (origin2d.Y > mostBottom) ? origin2d.Y : mostBottom;
                 }
 
                 double actorHeight = mostBottom - mostTop;
@@ -190,25 +172,6 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
                 }
 
                 if (Features::Visuals::skeleton) {
-                    const wchar_t* bonePairs[][2] = {
-                        { L"head", L"neck_01" },
-                        { L"neck_01", L"spine_03" },
-                        { L"spine_03", L"spine_01" },
-                        { L"spine_01", L"pelvis" },
-                        { L"neck_01", L"upperarm_l" },
-                        { L"upperarm_l", L"lowerarm_l" },
-                        { L"lowerarm_l", L"hand_l" },
-                        { L"neck_01", L"upperarm_r" },
-                        { L"upperarm_r", L"lowerarm_r" },
-                        { L"lowerarm_r", L"hand_r" },
-                        { L"pelvis", L"thigh_l" },
-                        { L"thigh_l", L"calf_l" },
-                        { L"calf_l", L"foot_l" },
-                        { L"pelvis", L"thigh_r" },
-                        { L"thigh_r", L"calf_r" },
-                        { L"calf_r", L"foot_r" }
-                    };
-
                     for (auto& pair : bonePairs) {
                         SDK::FName bone1Name = SDK::UKismetStringLibrary::Conv_StringToName(SDK::FString(pair[0]));
                         SDK::FName bone2Name = SDK::UKismetStringLibrary::Conv_StringToName(SDK::FString(pair[1]));
@@ -217,7 +180,7 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
                         SDK::FVector2D bone1Screen, bone2Screen = SDK::FVector2D();
 
                         if (K2_Project(bone1World, &bone1Screen) && K2_Project(bone2World, &bone2Screen)) {
-                            canvas->K2_DrawLine(bone1Screen, bone2Screen, 1.5f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
+                            canvas->K2_DrawLine(bone1Screen, bone2Screen, 2.0f, SDK::FLinearColor(0.0f, 0.0f, 0.0f, 1.0f));
                             canvas->K2_DrawLine(bone1Screen, bone2Screen, 1.0f, SDK::FLinearColor(1.0f, 1.0f, 1.0f, 1.0f));
                         }
                     }
@@ -256,7 +219,16 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
                     }
                 }
                 else {
-                    //
+                    if (chamsMaterial) {
+                        SDK::TArray<SDK::UMaterialInterface*> materials = skeletalMesh->GetMaterials();
+                        for (int32_t j = 0; j < materials.Num(); j++) {
+                            if (!materials.IsValidIndex(j)) {
+                                continue;
+                            }
+
+                            skeletalMesh->SetMaterial(j, nullptr);
+                        }
+                    }
                 }
             }
         }
@@ -273,11 +245,27 @@ void PostRender::Hooked_PostRender(SDK::UGameViewportClient* viewport, SDK::UCan
     GUI::DrawTxt(SDK::FVector2D(10.0f, 10.0f), SDK::FString(L"jewengine5 NIGGAAAAA"));
 
     if (GUI::open) {
-        GUI::BeginWindow(SDK::FVector2D(100.0f, 100.0f), SDK::FVector2D(300.0f, 400.0f), SDK::FString(L"jewengine5"));
+        const wchar_t* tabs[] = {
+            L"Visuals",
+            L"Aim",
+            L"Misc"
+        };
 
-        GUI::Checkbox(SDK::FString(L"Bounding Box"), &Features::Visuals::boundingBox);
-        GUI::Checkbox(SDK::FString(L"Skeleton"), &Features::Visuals::skeleton);
-        GUI::Checkbox(SDK::FString(L"Chams"), &Features::Visuals::chams);
+        GUI::BeginWindow(SDK::FVector2D(100.0f, 100.0f), SDK::FVector2D(460.0f, 350.0f), SDK::FString(L"jewengine5"));
+
+        GUI::Tabs(tabs, 3, &GUI::currentTab);
+
+        switch (GUI::currentTab) {
+        case 0:
+            GUI::Checkbox(SDK::FString(L"Bounding Box"), &Features::Visuals::boundingBox);
+            GUI::Checkbox(SDK::FString(L"Skeleton"), &Features::Visuals::skeleton);
+            GUI::Checkbox(SDK::FString(L"Chams"), &Features::Visuals::chams);
+            break;
+        case 1:
+            break;
+        case 2:
+            break;
+        }
     }
 
     return PostRenderOriginal(viewport, canvas);

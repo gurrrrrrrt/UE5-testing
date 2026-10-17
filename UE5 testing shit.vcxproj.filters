@@ -1803,6 +1803,9 @@
     <ClInclude Include="gui\framework.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="gui\zeroinput.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">

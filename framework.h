@@ -20,7 +20,9 @@ namespace Indexes {
 }
 
 namespace Render {
-	inline SDK::UFont* defaultFont = SDK::UObject::FindObject<SDK::UFont>("Font Roboto.Roboto");
+	namespace Fonts {
+		inline SDK::UFont* roboto = SDK::UObject::FindObject<SDK::UFont>("Font Roboto.Roboto");
+	}
 }
 
 namespace Features {
